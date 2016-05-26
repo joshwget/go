@@ -262,17 +262,21 @@ func (conf *resolverConfig) init() {
 func (conf *resolverConfig) tryUpdate(name string) {
 	conf.initOnce.Do(conf.init)
 
-	// Ensure only one update at a time checks resolv.conf.
-	if !conf.tryAcquireSema() {
-		return
-	}
-	defer conf.releaseSema()
-
 	now := time.Now()
 	if conf.lastChecked.After(now.Add(-5 * time.Second)) {
 		return
 	}
 	conf.lastChecked = now
+
+	conf.update(name)
+}
+
+func (conf *resolverConfig) update(name string) {
+	// Ensure only one update at a time checks resolv.conf.
+	if !conf.tryAcquireSema() {
+		return
+	}
+	defer conf.releaseSema()
 
 	if fi, err := os.Stat(name); err == nil {
 		if fi.ModTime().Equal(conf.modTime) {
@@ -291,6 +295,11 @@ func (conf *resolverConfig) tryUpdate(name string) {
 	conf.mu.Lock()
 	conf.dnsConfig = dnsConf
 	conf.mu.Unlock()
+}
+
+func UpdateDnsConf() {
+	resolvConf.initOnce.Do(resolvConf.init)
+	resolvConf.update("/etc/resolv.conf")
 }
 
 func (conf *resolverConfig) tryAcquireSema() bool {
